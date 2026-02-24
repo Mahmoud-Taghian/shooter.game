@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description"
+        content="Neon Vortex - An intense top-down space shooter with 6 weapons, augments, and boss battles.">
+    <title>Neon Vortex — Space Shooter</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="game-wrapper">
+        <!-- Main Canvas -->
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- HUD Overlay -->
+        <div id="hud" class="hidden">
+            <div id="hud-top">
+                <div id="hud-score">
+                    <span class="hud-label">SCORE</span>
+                    <span id="score-value">0</span>
+                </div>
+                <div id="hud-wave">
+                    <span class="hud-label">WAVE</span>
+                    <span id="wave-value">1</span>
+                </div>
+                <div id="hud-combo">
+                    <span class="hud-label">COMBO</span>
+                    <span id="combo-value">x1</span>
+                </div>
+            </div>
+            <div id="hud-bottom">
+                <div id="hud-health">
+                    <div id="health-bar-bg">
+                        <div id="health-bar-fill"></div>
+                    </div>
+                    <span id="health-text">100 / 100</span>
+                </div>
+                <div id="hud-weapon">
+                    <span class="hud-label">WEAPON</span>
+                    <span id="weapon-name">Pulse Blaster</span>
+                </div>
+                <div id="hud-augments">
+                    <span class="hud-label">AUGMENTS</span>
+                    <div id="augment-icons"></div>
+                </div>
+            </div>
+            <div id="weapon-bar">
+                <div class="weapon-slot active" data-weapon="0"><span class="weapon-key">1</span><span
+                        class="weapon-slot-name">Pulse</span></div>
+                <div class="weapon-slot" data-weapon="1"><span class="weapon-key">2</span><span
+                        class="weapon-slot-name">Spread</span></div>
+                <div class="weapon-slot" data-weapon="2"><span class="weapon-key">3</span><span
+                        class="weapon-slot-name">Beam</span></div>
+                <div class="weapon-slot" data-weapon="3"><span class="weapon-key">4</span><span
+                        class="weapon-slot-name">Rocket</span></div>
+                <div class="weapon-slot" data-weapon="4"><span class="weapon-key">5</span><span
+                        class="weapon-slot-name">Homing</span></div>
+                <div class="weapon-slot" data-weapon="5"><span class="weapon-key">6</span><span
+                        class="weapon-slot-name">Rail</span></div>
+            </div>
+        </div>
+
+        <!-- Main Menu -->
+        <div id="main-menu" class="screen-overlay">
+            <div class="menu-panel">
+                <h1 class="game-title">NEON<br><span class="title-accent">VORTEX</span></h1>
+                <p class="game-subtitle">TOP-DOWN SPACE SHOOTER</p>
+                <button id="btn-start" class="btn-primary">START GAME</button>
+                <div class="controls-hint">
+                    <p><strong>WASD</strong> Move &nbsp;|&nbsp; <strong>Mouse</strong> Aim &nbsp;|&nbsp;
+                        <strong>Click</strong> Shoot</p>
+                    <p><strong>1-6</strong> Switch Weapon &nbsp;|&nbsp; <strong>ESC</strong> Pause</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pause Menu -->
+        <div id="pause-menu" class="screen-overlay hidden">
+            <div class="menu-panel">
+                <h2 class="panel-title">PAUSED</h2>
+                <button id="btn-resume" class="btn-primary">RESUME</button>
+                <button id="btn-quit" class="btn-secondary">QUIT TO MENU</button>
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameover-screen" class="screen-overlay hidden">
+            <div class="menu-panel">
+                <h2 class="panel-title gameover-title">GAME OVER</h2>
+                <div id="final-stats">
+                    <div class="stat-row"><span>Score</span><span id="final-score">0</span></div>
+                    <div class="stat-row"><span>Wave</span><span id="final-wave">1</span></div>
+                    <div class="stat-row"><span>High Score</span><span id="high-score">0</span></div>
+                </div>
+                <button id="btn-restart" class="btn-primary">PLAY AGAIN</button>
+                <button id="btn-menu" class="btn-secondary">MAIN MENU</button>
+            </div>
+        </div>
+
+        <!-- Augment Selection Screen -->
+        <div id="augment-screen" class="screen-overlay hidden">
+            <div class="menu-panel augment-panel">
+                <h2 class="panel-title">CHOOSE AN AUGMENT</h2>
+                <p class="augment-subtitle">Wave <span id="augment-wave">3</span> completed!</p>
+                <div id="augment-choices"></div>
+            </div>
+        </div>
+
+        <!-- Wave Announcement -->
+        <div id="wave-announce" class="hidden">
+            <span id="wave-announce-text">WAVE 1</span>
+        </div>
+    </div>
+
+    <script src="js/sound.js"></script>
+    <script src="js/engine.js"></script>
+    <script src="js/entities.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/game.js"></script>
+</body>
+
+</html>
