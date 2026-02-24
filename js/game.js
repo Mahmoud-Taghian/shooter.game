@@ -36,6 +36,15 @@ const Game = (() => {
         document.getElementById('btn-restart').addEventListener('click', startGame);
         document.getElementById('btn-menu').addEventListener('click', quitToMenu);
 
+        // Pause button in HUD
+        const pauseBtn = document.getElementById('btn-pause');
+        if (pauseBtn) {
+            pauseBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (state === 'playing') pauseGame();
+            });
+        }
+
         // Weapon switch from keys
         document.addEventListener('weaponswitch', e => {
             if (state === 'playing' && player) {
@@ -177,12 +186,19 @@ const Game = (() => {
                 Sound.shoot_homing();
                 break;
 
-            case 'rail':
-                bullets.push(new Bullet(muzzleX, muzzleY, player.angle, w, dmg, sz));
-                Engine.triggerShake(4, 0.1);
-                Engine.spawnParticles(muzzleX, muzzleY, 10, { speed: 200, life: 0.2, size: 2, color: w.color, angle: player.angle, spread: 0.2 });
+            case 'rail': {
+                // Fire multiple rail bullets in a tight spread
+                const bulletCount = w.bulletCount || 3;
+                const spread = w.railSpread || 0.06;
+                for (let i = 0; i < bulletCount; i++) {
+                    const offset = (i - (bulletCount - 1) / 2) * spread;
+                    bullets.push(new Bullet(muzzleX, muzzleY, player.angle + offset, w, dmg, sz));
+                }
+                Engine.triggerShake(5, 0.12);
+                Engine.spawnParticles(muzzleX, muzzleY, 12, { speed: 250, life: 0.2, size: 2, color: w.color, angle: player.angle, spread: 0.2 });
                 Sound.shoot_rail();
                 break;
+            }
         }
     }
 
@@ -318,8 +334,10 @@ const Game = (() => {
                         b.dead = true;
                     }
 
-                    // Rocket explosion
-                    if (b.explosionRadius > 0 && !b.piercing) {
+                    // Rocket AoE explosion on impact
+                    if (b.aoeEnabled && b.explosionRadius > 0) {
+                        rocketExplosion(b.x, b.y, b.explosionRadius, b.damage * 0.6);
+                    } else if (b.explosionRadius > 0 && !b.piercing) {
                         rocketExplosion(b.x, b.y, b.explosionRadius, b.damage * 0.5);
                     }
 
@@ -423,17 +441,25 @@ const Game = (() => {
         }
     }
 
-    // ---- Rocket Explosion ----
+    // ---- Rocket Explosion (AoE) ----
     function rocketExplosion(x, y, radius, damage) {
-        Engine.spawnParticles(x, y, 25, { speed: 250, life: 0.5, size: 5, color: '#ff6600' });
-        Engine.spawnParticles(x, y, 15, { speed: 150, life: 0.4, size: 3, color: '#ff2d55' });
-        Engine.triggerShake(10, 0.25);
-        Sound.explosion_large();
+        // Visual AoE ring
+        Engine.spawnParticles(x, y, 30, { speed: 300, life: 0.6, size: 5, color: '#ff6600' });
+        Engine.spawnParticles(x, y, 20, { speed: 180, life: 0.5, size: 4, color: '#ff2d55' });
+        Engine.spawnParticles(x, y, 10, { speed: 100, life: 0.4, size: 3, color: '#ffaa00' });
+        Engine.triggerShake(12, 0.3);
+        Sound.rocket_aoe();
 
+        // Damage all enemies in the AoE radius
         for (const e of enemies) {
             if (e.dead) continue;
-            if (Engine.distance(x, y, e.x, e.y) < radius) {
-                e.takeDamage(damage);
+            const dist = Engine.distance(x, y, e.x, e.y);
+            if (dist < radius) {
+                // Damage falloff based on distance from center
+                const falloff = 1 - (dist / radius) * 0.5;
+                e.takeDamage(damage * falloff);
+                // Knockback effect via particles
+                Engine.spawnParticles(e.x, e.y, 5, { speed: 150, life: 0.3, size: 3, color: '#ff8800' });
                 if (e.dead) onEnemyKilled(e);
             }
         }
@@ -512,11 +538,13 @@ const Game = (() => {
 
     function pauseGame() {
         state = 'paused';
+        Sound.pause_open();
         UI.show('pause-menu');
     }
 
     function resumeGame() {
         state = 'playing';
+        Sound.pause_close();
         UI.hide('pause-menu');
     }
 
@@ -552,6 +580,9 @@ const Game = (() => {
             if (state === 'playing' && Engine.mouse.down && player.currentWeapon === 2) {
                 drawBeam();
             }
+
+            // Draw AoE indicators for rocket explosions
+            // (handled visually via particles)
 
             // Power-ups
             powerUps.forEach(p => p.draw(ctx));

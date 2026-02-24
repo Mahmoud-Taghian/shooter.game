@@ -44,27 +44,30 @@ const WEAPONS = [
         speed: 400,
         bulletSize: 8,
         type: 'rocket',
-        explosionRadius: 80
+        explosionRadius: 140,
+        aoeEnabled: true
     },
     {
         name: 'Homing Missiles',
-        fireRate: 0.4,
+        fireRate: 0.18,
         color: '#39ff14',
         damage: 25,
-        speed: 350,
+        speed: 420,
         bulletSize: 5,
         type: 'homing',
-        turnSpeed: 4
+        turnSpeed: 5
     },
     {
         name: 'Rail Gun',
-        fireRate: 0.8,
+        fireRate: 0.6,
         color: '#ffe600',
         damage: 45,
-        speed: 2000,
-        bulletSize: 3,
+        speed: 2400,
+        bulletSize: 4,
         type: 'rail',
-        piercing: true
+        piercing: true,
+        bulletCount: 3,
+        railSpread: 0.06
     }
 ];
 
@@ -135,8 +138,11 @@ class Player {
         this.augments = [];
         this.augmentCounts = {};
 
-        // Thruster particles timer
+        // Animation timers
         this.thrusterTimer = 0;
+        this.enginePulse = 0;
+        this.wingFlap = 0;
+        this.shieldRotation = 0;
     }
 
     getFireRate() {
@@ -185,7 +191,9 @@ class Player {
         if (Engine.keys['a'] || Engine.keys['arrowleft']) dx -= 1;
         if (Engine.keys['d'] || Engine.keys['arrowright']) dx += 1;
 
-        if (dx !== 0 || dy !== 0) {
+        const isMoving = dx !== 0 || dy !== 0;
+
+        if (isMoving) {
             const len = Math.sqrt(dx * dx + dy * dy);
             dx /= len; dy /= len;
             this.x += dx * this.speed * dt;
@@ -194,16 +202,28 @@ class Player {
             // Thruster particles
             this.thrusterTimer -= dt;
             if (this.thrusterTimer <= 0) {
-                this.thrusterTimer = 0.03;
+                this.thrusterTimer = 0.025;
                 const backAngle = this.angle + Math.PI;
+                Engine.spawnParticles(
+                    this.x + Math.cos(backAngle) * 16,
+                    this.y + Math.sin(backAngle) * 16,
+                    2,
+                    { speed: 100, life: 0.35, size: 3.5, color: '#00f0ff', angle: backAngle, spread: 0.4 }
+                );
+                // Secondary orange thruster
                 Engine.spawnParticles(
                     this.x + Math.cos(backAngle) * 14,
                     this.y + Math.sin(backAngle) * 14,
                     1,
-                    { speed: 80, life: 0.3, size: 3, color: '#00f0ff', angle: backAngle, spread: 0.5 }
+                    { speed: 60, life: 0.2, size: 2, color: '#ff8800', angle: backAngle, spread: 0.3 }
                 );
             }
         }
+
+        // Animate
+        this.enginePulse += dt * 8;
+        this.wingFlap += dt * (isMoving ? 12 : 4);
+        this.shieldRotation += dt * 2;
 
         // Clamp to bounds
         this.x = Engine.clamp(this.x, this.radius, canvasW - this.radius);
@@ -223,48 +243,134 @@ class Player {
         ctx.translate(this.x, this.y);
         ctx.rotate(this.angle);
 
+        const pulseVal = Math.sin(this.enginePulse) * 0.5 + 0.5;
+        const isFlashing = this.invincible > 0 && Math.sin(Date.now() * 0.02) > 0;
+
         // Shield visualization
         if (this.shieldTimer > 0) {
-            ctx.strokeStyle = 'rgba(0, 240, 255, 0.4)';
-            ctx.lineWidth = 3;
+            ctx.save();
+            ctx.rotate(-this.angle + this.shieldRotation);
+            // Outer shield hex ring
+            ctx.strokeStyle = `rgba(0, 240, 255, ${0.25 + pulseVal * 0.2})`;
+            ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.arc(0, 0, this.radius + 10, 0, Math.PI * 2);
+            for (let i = 0; i < 6; i++) {
+                const a = (i / 6) * Math.PI * 2;
+                const r = this.radius + 14 + Math.sin(this.shieldRotation * 3 + i) * 2;
+                if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+                else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+            }
+            ctx.closePath();
             ctx.stroke();
-            ctx.strokeStyle = 'rgba(0, 240, 255, 0.15)';
+            // Inner shield circle
+            ctx.strokeStyle = `rgba(0, 240, 255, ${0.15 + pulseVal * 0.1})`;
+            ctx.lineWidth = 1.5;
             ctx.beginPath();
-            ctx.arc(0, 0, this.radius + 15, 0, Math.PI * 2);
+            ctx.arc(0, 0, this.radius + 8, 0, Math.PI * 2);
             ctx.stroke();
+            ctx.restore();
         }
 
-        // Ship body - a sleek triangle shape
-        ctx.fillStyle = this.invincible > 0 && Math.sin(Date.now() * 0.02) > 0 ? 'rgba(255,255,255,0.5)' : '#c8d8ff';
-        ctx.shadowColor = '#00f0ff';
-        ctx.shadowBlur = 20;
+        // Engine glow (behind ship)
+        const engineGlow = 12 + pulseVal * 8;
+        const engineGlowGrad = ctx.createRadialGradient(-12, 0, 0, -12, 0, engineGlow);
+        engineGlowGrad.addColorStop(0, `rgba(0, 200, 255, ${0.3 + pulseVal * 0.15})`);
+        engineGlowGrad.addColorStop(0.5, `rgba(0, 120, 255, ${0.1 + pulseVal * 0.05})`);
+        engineGlowGrad.addColorStop(1, 'rgba(0, 80, 255, 0)');
+        ctx.fillStyle = engineGlowGrad;
         ctx.beginPath();
-        ctx.moveTo(22, 0);
-        ctx.lineTo(-14, -14);
-        ctx.lineTo(-8, 0);
-        ctx.lineTo(-14, 14);
+        ctx.arc(-12, 0, engineGlow, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Ship body outline glow
+        ctx.shadowColor = '#00f0ff';
+        ctx.shadowBlur = isFlashing ? 35 : 18;
+
+        // Wing panels (back fins)
+        const flapOffset = Math.sin(this.wingFlap) * 1.5;
+        ctx.fillStyle = isFlashing ? 'rgba(255,255,255,0.6)' : '#6880aa';
+        ctx.beginPath();
+        ctx.moveTo(-16, -16 - flapOffset);
+        ctx.lineTo(-8, -10);
+        ctx.lineTo(-14, -6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-16, 16 + flapOffset);
+        ctx.lineTo(-8, 10);
+        ctx.lineTo(-14, 6);
         ctx.closePath();
         ctx.fill();
 
-        // Cockpit glow
-        ctx.fillStyle = '#00f0ff';
-        ctx.shadowBlur = 30;
+        // Main hull - sleek fighter shape
+        ctx.fillStyle = isFlashing ? 'rgba(255,255,255,0.7)' : '#b0c4e8';
         ctx.beginPath();
-        ctx.arc(4, 0, 4, 0, Math.PI * 2);
+        ctx.moveTo(24, 0);         // Nose
+        ctx.lineTo(10, -6);
+        ctx.lineTo(-4, -12);
+        ctx.lineTo(-14, -14);      // Left wing tip
+        ctx.lineTo(-10, -4);
+        ctx.lineTo(-12, 0);
+        ctx.lineTo(-10, 4);
+        ctx.lineTo(-14, 14);       // Right wing tip
+        ctx.lineTo(-4, 12);
+        ctx.lineTo(10, 6);
+        ctx.closePath();
         ctx.fill();
 
-        // Wing accents
-        ctx.strokeStyle = '#00f0ff';
-        ctx.shadowBlur = 10;
+        // Hull panel lines
+        ctx.strokeStyle = isFlashing ? 'rgba(255,255,255,0.3)' : 'rgba(0, 200, 255, 0.25)';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(20, 0);
+        ctx.lineTo(-8, -8);
+        ctx.moveTo(20, 0);
+        ctx.lineTo(-8, 8);
+        ctx.stroke();
+
+        // Engine nozzles
+        ctx.fillStyle = `rgba(0, 200, 255, ${0.6 + pulseVal * 0.4})`;
+        ctx.fillRect(-13, -5, 4, 3);
+        ctx.fillRect(-13, 2, 4, 3);
+
+        // Cockpit canopy
+        ctx.shadowBlur = 25;
+        ctx.shadowColor = '#00f0ff';
+        const cockpitGrad = ctx.createRadialGradient(8, 0, 0, 8, 0, 6);
+        cockpitGrad.addColorStop(0, '#66ffff');
+        cockpitGrad.addColorStop(0.5, '#00d4ff');
+        cockpitGrad.addColorStop(1, 'rgba(0, 180, 255, 0.3)');
+        ctx.fillStyle = cockpitGrad;
+        ctx.beginPath();
+        ctx.ellipse(8, 0, 5, 3.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Wing edge neon accents
+        ctx.strokeStyle = `rgba(0, 240, 255, ${0.6 + pulseVal * 0.3})`;
+        ctx.shadowBlur = 12;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(-10, -12);
-        ctx.lineTo(14, 0);
-        ctx.moveTo(-10, 12);
-        ctx.lineTo(14, 0);
+        ctx.moveTo(-14, -14);
+        ctx.lineTo(6, -5);
+        ctx.lineTo(22, 0);
         ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-14, 14);
+        ctx.lineTo(6, 5);
+        ctx.lineTo(22, 0);
+        ctx.stroke();
+
+        // Weapon indicator dots on wings
+        const weaponColor = WEAPONS[this.currentWeapon].color;
+        ctx.fillStyle = weaponColor;
+        ctx.shadowColor = weaponColor;
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(0, -8, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(0, 8, 1.5, 0, Math.PI * 2);
+        ctx.fill();
 
         ctx.shadowBlur = 0;
         ctx.restore();
@@ -304,13 +410,17 @@ class Bullet {
         this.life = 3;
         this.piercing = weapon.piercing || false;
         this.explosionRadius = weapon.explosionRadius || 0;
+        this.aoeEnabled = weapon.aoeEnabled || false;
         this.turnSpeed = weapon.turnSpeed || 0;
         this.target = null;
         this.bounced = false;
         this.trail = [];
+        this.age = 0;
     }
 
     update(dt, canvasW, canvasH, enemies, ricochet) {
+        this.age += dt;
+
         // Homing logic
         if (this.type === 'homing' && this.owner === 'player') {
             if (!this.target || this.target.dead) {
@@ -338,7 +448,7 @@ class Bullet {
 
         // Trail
         this.trail.push({ x: this.x, y: this.y, age: 0 });
-        if (this.trail.length > 8) this.trail.shift();
+        if (this.trail.length > 10) this.trail.shift();
         for (const t of this.trail) t.age += dt;
 
         // Bounds check / ricochet
@@ -356,31 +466,137 @@ class Bullet {
         // Trail
         for (let i = 0; i < this.trail.length; i++) {
             const t = this.trail[i];
-            const alpha = (i / this.trail.length) * 0.4;
+            const alpha = (i / this.trail.length) * 0.45;
             ctx.globalAlpha = alpha;
             ctx.fillStyle = this.color;
             ctx.beginPath();
-            ctx.arc(t.x, t.y, this.radius * 0.6, 0, Math.PI * 2);
+            ctx.arc(t.x, t.y, this.radius * 0.5, 0, Math.PI * 2);
             ctx.fill();
         }
         ctx.globalAlpha = 1;
 
-        // Main bullet
-        ctx.fillStyle = this.color;
+        // Main bullet drawing by type
         ctx.shadowColor = this.color;
-        ctx.shadowBlur = 15;
-        ctx.beginPath();
+        ctx.shadowBlur = 18;
 
         if (this.type === 'rocket') {
             ctx.save();
             ctx.translate(this.x, this.y);
             ctx.rotate(this.angle);
-            ctx.fillRect(-this.radius, -this.radius * 0.5, this.radius * 2, this.radius);
+
+            // Rocket body
+            ctx.fillStyle = '#cc2244';
+            ctx.beginPath();
+            ctx.moveTo(this.radius * 1.2, 0);
+            ctx.lineTo(-this.radius, -this.radius * 0.45);
+            ctx.lineTo(-this.radius * 0.6, 0);
+            ctx.lineTo(-this.radius, this.radius * 0.45);
+            ctx.closePath();
+            ctx.fill();
+
+            // Rocket nose
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.radius * 0.6, 0, this.radius * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Fins
+            ctx.fillStyle = '#ff6688';
+            ctx.beginPath();
+            ctx.moveTo(-this.radius * 0.8, -this.radius * 0.45);
+            ctx.lineTo(-this.radius * 1.2, -this.radius * 0.7);
+            ctx.lineTo(-this.radius * 0.4, -this.radius * 0.3);
+            ctx.closePath();
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(-this.radius * 0.8, this.radius * 0.45);
+            ctx.lineTo(-this.radius * 1.2, this.radius * 0.7);
+            ctx.lineTo(-this.radius * 0.4, this.radius * 0.3);
+            ctx.closePath();
+            ctx.fill();
+
+            // Exhaust glow
+            const exGrad = ctx.createRadialGradient(-this.radius, 0, 0, -this.radius, 0, this.radius * 0.8);
+            exGrad.addColorStop(0, 'rgba(255, 200, 100, 0.8)');
+            exGrad.addColorStop(0.5, 'rgba(255, 100, 0, 0.3)');
+            exGrad.addColorStop(1, 'rgba(255, 50, 0, 0)');
+            ctx.fillStyle = exGrad;
+            ctx.beginPath();
+            ctx.arc(-this.radius, 0, this.radius * 0.8, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        } else if (this.type === 'homing') {
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.angle);
+
+            // Missile shape
+            ctx.fillStyle = '#22cc44';
+            ctx.beginPath();
+            ctx.moveTo(this.radius * 1.5, 0);
+            ctx.lineTo(-this.radius * 0.8, -this.radius * 0.5);
+            ctx.lineTo(-this.radius * 0.5, 0);
+            ctx.lineTo(-this.radius * 0.8, this.radius * 0.5);
+            ctx.closePath();
+            ctx.fill();
+
+            // Seeker head
+            ctx.fillStyle = this.color;
+            ctx.shadowBlur = 12;
+            ctx.beginPath();
+            ctx.arc(this.radius * 0.7, 0, this.radius * 0.35, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Exhaust
+            const hmGrad = ctx.createRadialGradient(-this.radius * 0.5, 0, 0, -this.radius * 0.5, 0, this.radius * 0.6);
+            hmGrad.addColorStop(0, 'rgba(57, 255, 20, 0.6)');
+            hmGrad.addColorStop(1, 'rgba(57, 255, 20, 0)');
+            ctx.fillStyle = hmGrad;
+            ctx.beginPath();
+            ctx.arc(-this.radius * 0.5, 0, this.radius * 0.6, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        } else if (this.type === 'rail') {
+            // Elongated energy bolt
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.angle);
+
+            // Core streak
+            ctx.fillStyle = '#ffffff';
+            ctx.shadowColor = this.color;
+            ctx.shadowBlur = 20;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, this.radius * 3, this.radius * 0.6, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Outer glow
+            ctx.fillStyle = this.color;
+            ctx.globalAlpha = 0.5;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, this.radius * 4, this.radius * 1.2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
+
             ctx.restore();
         } else {
+            // Default bullet (pulse, spread, enemy)
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
             ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
             ctx.fill();
+
+            // Inner bright core
+            ctx.fillStyle = '#ffffff';
+            ctx.globalAlpha = 0.6;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 1;
         }
+
         ctx.shadowBlur = 0;
     }
 }
@@ -393,6 +609,8 @@ class Enemy {
         this.type = type;
         this.dead = false;
         this.flashTimer = 0;
+        this.animPhase = Math.random() * Math.PI * 2;
+        this.eyeTrackAngle = 0;
 
         const s = 1 + wave * 0.08; // difficulty scaling
         switch (type) {
@@ -433,7 +651,9 @@ class Enemy {
 
     update(dt, player, canvasW, canvasH) {
         this.flashTimer -= dt;
+        this.animPhase += dt * 4;
         const angle = Engine.angleBetween(this.x, this.y, player.x, player.y);
+        this.eyeTrackAngle = angle;
 
         switch (this.type) {
             case 'chaser':
@@ -471,60 +691,227 @@ class Enemy {
         ctx.translate(this.x, this.y);
 
         const flash = this.flashTimer > 0;
-        ctx.fillStyle = flash ? '#ffffff' : this.color;
+        const pulse = Math.sin(this.animPhase) * 0.5 + 0.5;
         ctx.shadowColor = this.color;
-        ctx.shadowBlur = flash ? 30 : 15;
+        ctx.shadowBlur = flash ? 35 : 15 + pulse * 5;
 
         switch (this.type) {
-            case 'chaser':
-                // Pointed triangle
+            case 'chaser': {
+                const faceAngle = this.eyeTrackAngle;
+                ctx.rotate(faceAngle + Math.PI / 2);
+
+                // Outer aura
+                ctx.globalAlpha = 0.15 + pulse * 0.1;
+                ctx.fillStyle = this.color;
                 ctx.beginPath();
-                const a = Engine.angleBetween(0, 0, Engine.mouse.x - this.x, Engine.mouse.y - this.y);
-                for (let i = 0; i < 3; i++) {
-                    const angle = (i / 3) * Math.PI * 2 - Math.PI / 2;
-                    ctx.lineTo(Math.cos(angle) * this.radius, Math.sin(angle) * this.radius);
+                ctx.arc(0, 0, this.radius + 6 + pulse * 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+
+                // Body - organic spiky shape
+                ctx.fillStyle = flash ? '#ffffff' : '#cc1870';
+                ctx.beginPath();
+                const spikes = 5;
+                for (let i = 0; i < spikes * 2; i++) {
+                    const a = (i / (spikes * 2)) * Math.PI * 2 - Math.PI / 2;
+                    const r = i % 2 === 0
+                        ? this.radius + Math.sin(this.animPhase + i) * 2
+                        : this.radius * 0.6;
+                    ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
                 }
                 ctx.closePath();
                 ctx.fill();
-                break;
-            case 'shooter':
-                // Diamond
-                ctx.beginPath();
-                ctx.moveTo(0, -this.radius);
-                ctx.lineTo(this.radius * 0.7, 0);
-                ctx.lineTo(0, this.radius);
-                ctx.lineTo(-this.radius * 0.7, 0);
-                ctx.closePath();
-                ctx.fill();
-                // Eye
-                ctx.fillStyle = '#ffffff';
-                ctx.shadowBlur = 0;
-                ctx.beginPath();
-                ctx.arc(0, 0, 3, 0, Math.PI * 2);
-                ctx.fill();
-                break;
-            case 'boss':
-                // Large hexagon
-                ctx.beginPath();
-                for (let i = 0; i < 6; i++) {
-                    const angle = (i / 6) * Math.PI * 2;
-                    ctx.lineTo(Math.cos(angle) * this.radius, Math.sin(angle) * this.radius);
-                }
-                ctx.closePath();
-                ctx.fill();
-                // Inner ring
-                ctx.strokeStyle = flash ? '#ffffff' : '#ff8800';
-                ctx.lineWidth = 3;
+
+                // Inner body
+                ctx.fillStyle = flash ? '#ffccee' : this.color;
                 ctx.beginPath();
                 ctx.arc(0, 0, this.radius * 0.55, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Eyes (two menacing dots)
+                ctx.fillStyle = '#ffffff';
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(-3, -2, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(3, -2, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Pupils
+                ctx.fillStyle = '#220011';
+                ctx.shadowBlur = 0;
+                ctx.beginPath();
+                ctx.arc(-3, -2.5, 1.2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(3, -2.5, 1.2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Angry mouth
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(0, 3, 4, 0.2, Math.PI - 0.2);
                 ctx.stroke();
+                break;
+            }
+            case 'shooter': {
+                // Rotating turret enemy
+                const turretAngle = this.eyeTrackAngle;
+
+                // Outer energy ring
+                ctx.globalAlpha = 0.12 + pulse * 0.08;
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius + 8, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.globalAlpha = 1;
+
+                // Diamond body with detail
+                ctx.fillStyle = flash ? '#ffffff' : '#7733bb';
+                ctx.beginPath();
+                ctx.moveTo(0, -this.radius);
+                ctx.lineTo(this.radius * 0.75, 0);
+                ctx.lineTo(0, this.radius);
+                ctx.lineTo(-this.radius * 0.75, 0);
+                ctx.closePath();
+                ctx.fill();
+
+                // Inner diamond
+                ctx.fillStyle = flash ? '#eeddff' : '#9955dd';
+                ctx.beginPath();
+                const innerR = this.radius * 0.55;
+                ctx.moveTo(0, -innerR);
+                ctx.lineTo(innerR * 0.75, 0);
+                ctx.lineTo(0, innerR);
+                ctx.lineTo(-innerR * 0.75, 0);
+                ctx.closePath();
+                ctx.fill();
+
+                // Cannon barrel pointing at player
+                ctx.save();
+                ctx.rotate(turretAngle - this.eyeTrackAngle); // Cancel parent rotation
+                ctx.rotate(turretAngle);
+                ctx.fillStyle = flash ? '#ffffff' : '#bb88ff';
+                ctx.fillRect(0, -2, this.radius * 0.9, 4);
+                // Barrel tip glow
+                ctx.fillStyle = this.color;
+                ctx.shadowColor = this.color;
+                ctx.shadowBlur = 10;
+                ctx.beginPath();
+                ctx.arc(this.radius * 0.9, 0, 3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+
+                // Central eye
+                ctx.fillStyle = '#ffffff';
+                ctx.shadowColor = '#ffffff';
+                ctx.shadowBlur = 10;
+                ctx.beginPath();
+                ctx.arc(0, 0, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 5;
+                ctx.beginPath();
+                ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+                break;
+            }
+            case 'boss': {
+                const bossAngle = this.phaseAngle || 0;
+
+                // Menacing outer aura
+                ctx.globalAlpha = 0.08 + pulse * 0.06;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius + 20 + pulse * 8, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+
+                // Rotating hex body
+                ctx.save();
+                ctx.rotate(bossAngle * 0.3);
+                ctx.fillStyle = flash ? '#ffffff' : '#cc9900';
+                ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const a = (i / 6) * Math.PI * 2;
+                    const r = this.radius + Math.sin(this.animPhase + i * 0.5) * 3;
+                    ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+                }
+                ctx.closePath();
+                ctx.fill();
+
+                // Inner armored panels
+                ctx.fillStyle = flash ? '#ffffcc' : '#ddaa00';
+                ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+                    ctx.lineTo(Math.cos(a) * this.radius * 0.7, Math.sin(a) * this.radius * 0.7);
+                }
+                ctx.closePath();
+                ctx.fill();
+
+                // Panel detail lines
+                ctx.strokeStyle = flash ? '#ffffff' : 'rgba(255, 200, 0, 0.4)';
+                ctx.lineWidth = 1;
+                for (let i = 0; i < 6; i++) {
+                    const a = (i / 6) * Math.PI * 2;
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(Math.cos(a) * this.radius * 0.95, Math.sin(a) * this.radius * 0.95);
+                    ctx.stroke();
+                }
+                ctx.restore();
+
+                // Central core (animated)
+                const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, this.radius * 0.35);
+                coreGrad.addColorStop(0, '#ffffff');
+                coreGrad.addColorStop(0.4, this.color);
+                coreGrad.addColorStop(1, 'rgba(255, 100, 0, 0.3)');
+                ctx.fillStyle = coreGrad;
+                ctx.shadowColor = this.color;
+                ctx.shadowBlur = 25;
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius * 0.3 + pulse * 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Orbiting energy orbs
+                for (let i = 0; i < 3; i++) {
+                    const orbAngle = bossAngle * 2 + (i / 3) * Math.PI * 2;
+                    const orbR = this.radius * 0.6;
+                    const ox = Math.cos(orbAngle) * orbR;
+                    const oy = Math.sin(orbAngle) * orbR;
+                    ctx.fillStyle = '#ff8800';
+                    ctx.shadowColor = '#ff8800';
+                    ctx.shadowBlur = 10;
+                    ctx.beginPath();
+                    ctx.arc(ox, oy, 4 + pulse * 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
                 // HP bar
                 const hpPct = this.hp / this.maxHp;
-                ctx.fillStyle = 'rgba(0,0,0,0.5)';
-                ctx.fillRect(-30, -this.radius - 14, 60, 6);
-                ctx.fillStyle = hpPct > 0.3 ? '#39ff14' : '#ff2d55';
-                ctx.fillRect(-30, -this.radius - 14, 60 * hpPct, 6);
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                ctx.fillRect(-35, -this.radius - 18, 70, 8);
+                ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(-35, -this.radius - 18, 70, 8);
+                const hpGrad = ctx.createLinearGradient(-35, 0, -35 + 70 * hpPct, 0);
+                if (hpPct > 0.3) {
+                    hpGrad.addColorStop(0, '#39ff14');
+                    hpGrad.addColorStop(1, '#66ff66');
+                } else {
+                    hpGrad.addColorStop(0, '#ff2d55');
+                    hpGrad.addColorStop(1, '#ff6666');
+                }
+                ctx.fillStyle = hpGrad;
+                ctx.fillRect(-35, -this.radius - 18, 70 * hpPct, 8);
                 break;
+            }
         }
 
         ctx.shadowBlur = 0;
@@ -550,6 +937,7 @@ class PowerUp {
         this.dead = false;
         this.life = 10;
         this.bobPhase = Math.random() * Math.PI * 2;
+        this.spinAngle = 0;
 
         switch (type) {
             case 'health': this.color = '#39ff14'; break;
@@ -561,26 +949,41 @@ class PowerUp {
     update(dt) {
         this.life -= dt;
         this.bobPhase += dt * 3;
+        this.spinAngle += dt * 2;
         if (this.life <= 0) this.dead = true;
     }
 
     draw(ctx) {
         const bobY = Math.sin(this.bobPhase) * 4;
+        const pulse = Math.sin(this.bobPhase * 2) * 0.5 + 0.5;
         ctx.save();
         ctx.translate(this.x, this.y + bobY);
 
+        // Outer ring (animated)
+        ctx.save();
+        ctx.rotate(this.spinAngle);
+        ctx.strokeStyle = this.color;
+        ctx.globalAlpha = 0.2 + pulse * 0.15;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius + 8, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+
         // Glow
         ctx.shadowColor = this.color;
-        ctx.shadowBlur = 20;
+        ctx.shadowBlur = 20 + pulse * 10;
         ctx.fillStyle = this.color;
-        ctx.globalAlpha = 0.2;
+        ctx.globalAlpha = 0.15 + pulse * 0.1;
         ctx.beginPath();
         ctx.arc(0, 0, this.radius + 6, 0, Math.PI * 2);
         ctx.fill();
 
         // Body
         ctx.globalAlpha = 1;
-        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
         ctx.beginPath();
         ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
         ctx.fill();
@@ -592,6 +995,7 @@ class PowerUp {
         ctx.fillStyle = this.color;
         ctx.strokeStyle = this.color;
         ctx.lineWidth = 1.5;
+        ctx.shadowBlur = 8;
 
         if (this.type === 'health') {
             // Cross / plus sign
