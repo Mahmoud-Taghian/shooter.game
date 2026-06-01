@@ -116,9 +116,6 @@ const UI = (() => {
             show('create-room-screen');
             els.inputRoomName.focus();
         });
-        document.getElementById('btn-refresh-rooms').addEventListener('click', () => {
-            if (onConnect) onConnect(); // Trigger refresh
-        });
         document.getElementById('btn-join-code').addEventListener('click', () => {
             const code = els.inputRoomCode.value.trim().toUpperCase();
             if (code && onJoinRoom) onJoinRoom(code);
@@ -350,7 +347,7 @@ const UI = (() => {
                 <td>${p.kills}</td>
                 <td>${p.deaths}</td>
                 <td style="color:var(--neon-cyan)">${p.score || 0}</td>
-                <td style="color:var(--text-dim);font-weight:400;font-size:11px;">${isMe ? pingValue.textContent : '-'}</td>
+                <td style="color:var(--text-dim);font-weight:400;font-size:11px;">${isMe ? els.pingValue.textContent : '-'}</td>
             `;
             els.scoreboardBody.appendChild(tr);
         });

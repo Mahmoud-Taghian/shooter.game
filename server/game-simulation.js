@@ -161,6 +161,10 @@ class GameSimulation {
         if (this.config.teams) {
             this.assignTeams();
         }
+
+        // Start the tick loop so countdown can tick and broadcast
+        if (this.interval) clearInterval(this.interval);
+        this.interval = setInterval(() => this.update(1 / TICK_RATE), TICK_MS);
     }
 
     assignTeams() {
@@ -205,7 +209,8 @@ class GameSimulation {
             this.waveDelay = 2;
         }
 
-        // Start the tick loop
+        // Start the tick loop (clear first in case already running from countdown)
+        if (this.interval) clearInterval(this.interval);
         this.interval = setInterval(() => this.update(1 / TICK_RATE), TICK_MS);
     }
 
@@ -583,6 +588,7 @@ class GameSimulation {
             target.dead = true;
             target.deaths++;
             target.respawnTimer = this.config.respawnTime || 3;
+            target.killedBy = attacker ? attacker.name : 'Environment';
 
             if (this.scores[target.id]) {
                 this.scores[target.id].deaths++;
@@ -623,6 +629,7 @@ class GameSimulation {
         p.dead = false;
         p.invincible = PLAYER_DEFAULTS.invincibleTime;
         p.fireCooldown = 0;
+        p.killedBy = null;
     }
 
     // ---- Power-ups ----

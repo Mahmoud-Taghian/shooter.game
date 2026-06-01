@@ -126,6 +126,7 @@ const Game = (() => {
                 }
                 UI.hide('browser-screen');
                 UI.show('room-lobby');
+                UI.updateLobby(res.room, Network.playerId);
             }
         };
 
@@ -136,6 +137,7 @@ const Game = (() => {
                 document.getElementById('lobby-chat-messages').innerHTML = '';
                 UI.hide('create-room-screen');
                 UI.show('room-lobby');
+                UI.updateLobby(res.room, Network.playerId);
             }
         };
 
@@ -145,10 +147,12 @@ const Game = (() => {
         UI.onSendChat = (msg) => Network.sendChat(msg);
 
         // Network Events
+        Network.onError = (msg) => {
+            alert(msg);
+        };
+
         Network.onRoomsListUpdate = (rooms) => {
-            if (!document.getElementById('browser-screen').classList.contains('hidden')) {
-                UI.showRoomList(rooms);
-            }
+            UI.renderRoomList(rooms);
         };
 
         Network.onRoomUpdate = (room) => {
@@ -159,6 +163,27 @@ const Game = (() => {
 
         Network.onChat = (msg) => {
             UI.addChatMessage(msg);
+        };
+
+        Network.onGameState = (gameState) => {
+            // Transition from lobby to multiplayer game when server starts sending game state
+            if (!isMultiplayer || (state !== 'playing' && state !== 'countdown')) {
+                isMultiplayer = true;
+                Engine.clearParticles();
+
+                UI.hide('room-lobby');
+                UI.hide('main-menu');
+                UI.show('hud');
+                document.getElementById('hud-match-timer').classList.remove('hidden');
+                document.getElementById('hud-ping').classList.remove('hidden');
+                Sound.resume();
+
+                if (gameState.state === 'countdown') {
+                    state = 'countdown';
+                } else {
+                    state = 'playing';
+                }
+            }
         };
 
         Network.onGameEvent = (event) => {
@@ -535,19 +560,6 @@ const Game = (() => {
 
     // ---- Multiplayer Logic ----
     function updateMultiplayer(dt) {
-        // Transition from lobby to playing
-        if (state !== 'playing' && state !== 'countdown') {
-            state = 'playing';
-            isMultiplayer = true;
-            Engine.clearParticles();
-            
-            UI.hide('room-lobby');
-            UI.hide('main-menu');
-            UI.show('hud');
-            document.getElementById('hud-match-timer').classList.remove('hidden');
-            document.getElementById('hud-ping').classList.remove('hidden');
-            Sound.resume();
-        }
 
         mpState = Network.getInterpolatedState();
         if (!mpState) return;
@@ -556,36 +568,38 @@ const Game = (() => {
         if (mpState.state === 'countdown') {
             state = 'countdown';
             UI.showCountdown(mpState.countdownTimer);
-            return;
         } else {
+            if (state === 'countdown') {
+                UI.showCountdown(0);
+            }
             state = 'playing';
-            // hide countdown just in case
-            // it will hide automatically but let's be safe
         }
 
         // Send Input
-        inputTimer -= dt;
-        if (inputTimer <= 0) {
-            inputTimer = inputRate;
-            
-            // Assume player aims from screen center to mouse (simplification, since camera follows nothing right now)
-            // Wait, in our game canvas is fixed size or resizes to window?
-            // Local player is always at center? No, local player moves around fixed canvas right now.
-            const localP = mpState.players.find(p => p.id === Network.playerId);
-            let angle = 0;
-            if (localP) {
-                angle = Engine.angleBetween(localP.x, localP.y, Engine.mouse.x, Engine.mouse.y);
-            }
+        if (state === 'playing') {
+            inputTimer -= dt;
+            if (inputTimer <= 0) {
+                inputTimer = inputRate;
+                
+                // Assume player aims from screen center to mouse (simplification, since camera follows nothing right now)
+                // Wait, in our game canvas is fixed size or resizes to window?
+                // Local player is always at center? No, local player moves around fixed canvas right now.
+                const localP = mpState.players.find(p => p.id === Network.playerId);
+                let angle = 0;
+                if (localP) {
+                    angle = Engine.angleBetween(localP.x, localP.y, Engine.mouse.x, Engine.mouse.y);
+                }
 
-            Network.sendInput({
-                up: Engine.keys['w'] || Engine.keys['arrowup'],
-                down: Engine.keys['s'] || Engine.keys['arrowdown'],
-                left: Engine.keys['a'] || Engine.keys['arrowleft'],
-                right: Engine.keys['d'] || Engine.keys['arrowright'],
-                angle: angle,
-                shooting: Engine.mouse.down,
-                // Weapon handled by events
-            });
+                Network.sendInput({
+                    up: Engine.keys['w'] || Engine.keys['arrowup'],
+                    down: Engine.keys['s'] || Engine.keys['arrowdown'],
+                    left: Engine.keys['a'] || Engine.keys['arrowleft'],
+                    right: Engine.keys['d'] || Engine.keys['arrowright'],
+                    angle: angle,
+                    shooting: Engine.mouse.down,
+                    // Weapon handled by events
+                });
+            }
         }
 
         // Sync local RemotePlayers
@@ -609,7 +623,7 @@ const Game = (() => {
             UI.updateMatchHUD(mpState.matchTimer, Network.ping, mpState.mode, mpState.teamScores, mpState.round);
 
             if (localP.dead) {
-                UI.respawnTimerValue.textContent = Math.ceil(localP.respawnTimer);
+                UI.showRespawnOverlay(localP.killedBy, localP.respawnTimer);
             } else {
                 UI.hideRespawnOverlay();
             }
@@ -762,6 +776,7 @@ const Game = (() => {
         UI.hide('room-lobby');
         UI.hide('browser-screen');
         UI.hide('name-screen');
+        UI.hide('countdown-overlay');
         UI.show('main-menu');
     }
 
