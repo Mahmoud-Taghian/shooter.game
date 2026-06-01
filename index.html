@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description"
-        content="Neon Vortex - An intense top-down space shooter with 6 weapons, augments, and boss battles.">
+        content="Neon Vortex - An intense top-down space shooter with online multiplayer, 6 weapons, augments, and boss battles.">
     <title>Neon Vortex — Space Shooter</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -42,7 +42,32 @@
                     <span class="hud-label">COMBO</span>
                     <span id="combo-value">x1</span>
                 </div>
+                
+                <!-- Team Scores (Multiplayer) -->
+                <div id="hud-team-scores" class="hidden">
+                    <div class="team-score blue-team"><span id="team-0-score">0</span></div>
+                    <span class="hud-label">VS</span>
+                    <div class="team-score red-team"><span id="team-1-score">0</span></div>
+                </div>
+
+                <!-- Elimination Round (Multiplayer) -->
+                <div id="hud-round" class="hidden">
+                    <span class="hud-label">ROUND</span>
+                    <span id="round-value">1</span>
+                </div>
             </div>
+
+            <!-- Match Timer (multiplayer) -->
+            <div id="hud-match-timer" class="hidden">
+                <span id="match-timer-value">5:00</span>
+            </div>
+
+            <!-- Ping indicator -->
+            <div id="hud-ping" class="hidden">
+                <span id="ping-dot" class="ping-good"></span>
+                <span id="ping-value">0ms</span>
+            </div>
+
             <div id="hud-bottom">
                 <div id="hud-health">
                     <div id="health-bar-bg">
@@ -75,18 +100,189 @@
             </div>
         </div>
 
+        <!-- Kill Feed -->
+        <div id="kill-feed" class="hidden"></div>
+
+        <!-- Scoreboard (TAB) -->
+        <div id="scoreboard" class="hidden">
+            <div class="scoreboard-panel">
+                <h2 class="scoreboard-title">SCOREBOARD</h2>
+                <div id="scoreboard-mode"></div>
+                <table id="scoreboard-table">
+                    <thead>
+                        <tr>
+                            <th>PLAYER</th>
+                            <th>K</th>
+                            <th>D</th>
+                            <th>SCORE</th>
+                            <th>PING</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scoreboard-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Respawn Overlay -->
+        <div id="respawn-overlay" class="hidden">
+            <div class="respawn-content">
+                <div class="respawn-killed-by">
+                    <span id="respawn-killer-name"></span>
+                </div>
+                <div class="respawn-timer-display">
+                    <span id="respawn-timer-value">3</span>
+                </div>
+                <div class="respawn-hint">RESPAWNING...</div>
+            </div>
+        </div>
+
         <!-- Main Menu -->
         <div id="main-menu" class="screen-overlay">
             <div class="menu-panel">
                 <h1 class="game-title">NEON<br><span class="title-accent">VORTEX</span></h1>
                 <p class="game-subtitle">TOP-DOWN SPACE SHOOTER</p>
-                <button id="btn-start" class="btn-primary">START GAME</button>
+                <button id="btn-start" class="btn-primary">SOLO PLAY</button>
+                <button id="btn-multiplayer" class="btn-primary btn-multiplayer">ONLINE MULTIPLAYER</button>
                 <div class="controls-hint">
                     <p><strong>WASD</strong> Move &nbsp;|&nbsp; <strong>Mouse</strong> Aim &nbsp;|&nbsp;
                         <strong>Click</strong> Shoot
                     </p>
-                    <p><strong>1-6</strong> Switch Weapon &nbsp;|&nbsp; <strong>ESC</strong> Pause</p>
+                    <p><strong>1-6</strong> Switch Weapon &nbsp;|&nbsp; <strong>ESC</strong> Pause &nbsp;|&nbsp;
+                        <strong>TAB</strong> Scoreboard</p>
                 </div>
+            </div>
+        </div>
+
+        <!-- Name Entry Screen -->
+        <div id="name-screen" class="screen-overlay hidden">
+            <div class="menu-panel">
+                <h2 class="panel-title">ENTER CALLSIGN</h2>
+                <div class="name-input-wrap">
+                    <input type="text" id="input-player-name" class="neon-input" placeholder="PILOT_NAME"
+                        maxlength="16" autocomplete="off" spellcheck="false">
+                </div>
+                <div id="connecting-status" class="hidden">
+                    <div class="connecting-spinner"></div>
+                    <span>CONNECTING TO SERVER...</span>
+                </div>
+                <button id="btn-confirm-name" class="btn-primary">CONNECT</button>
+                <button id="btn-name-back" class="btn-secondary">BACK</button>
+            </div>
+        </div>
+
+        <!-- Server Browser -->
+        <div id="browser-screen" class="screen-overlay hidden">
+            <div class="menu-panel browser-panel">
+                <h2 class="panel-title">SERVER BROWSER</h2>
+                <div class="browser-actions">
+                    <button id="btn-create-room" class="btn-primary">CREATE ROOM</button>
+                    <div class="join-code-wrap">
+                        <input type="text" id="input-room-code" class="neon-input neon-input-sm"
+                            placeholder="ROOM CODE" maxlength="6" autocomplete="off" spellcheck="false">
+                        <button id="btn-join-code" class="btn-accent">JOIN</button>
+                    </div>
+                </div>
+                <div id="room-list">
+                    <div class="room-list-empty">No rooms available. Create one!</div>
+                </div>
+                <button id="btn-refresh-rooms" class="btn-secondary btn-sm">REFRESH</button>
+                <button id="btn-browser-back" class="btn-secondary">BACK TO MENU</button>
+            </div>
+        </div>
+
+        <!-- Create Room Screen -->
+        <div id="create-room-screen" class="screen-overlay hidden">
+            <div class="menu-panel">
+                <h2 class="panel-title">CREATE ROOM</h2>
+                <div class="form-group">
+                    <label class="form-label">ROOM NAME</label>
+                    <input type="text" id="input-room-name" class="neon-input" placeholder="Neon Vortex Arena"
+                        maxlength="30" autocomplete="off" spellcheck="false">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">GAME MODE</label>
+                    <div id="mode-select" class="mode-grid">
+                        <div class="mode-card active" data-mode="ffa">
+                            <div class="mode-icon">⚔</div>
+                            <div class="mode-name">FREE FOR ALL</div>
+                            <div class="mode-desc">Every pilot for themselves</div>
+                        </div>
+                        <div class="mode-card" data-mode="tdm">
+                            <div class="mode-icon">👥</div>
+                            <div class="mode-name">TEAM DEATHMATCH</div>
+                            <div class="mode-desc">Team up and dominate</div>
+                        </div>
+                        <div class="mode-card" data-mode="elimination">
+                            <div class="mode-icon">💀</div>
+                            <div class="mode-name">ELIMINATION</div>
+                            <div class="mode-desc">No respawns. Last team standing.</div>
+                        </div>
+                        <div class="mode-card" data-mode="pve">
+                            <div class="mode-icon">🛡</div>
+                            <div class="mode-name">CO-OP PVE</div>
+                            <div class="mode-desc">Survive waves together</div>
+                        </div>
+                    </div>
+                </div>
+                <button id="btn-do-create" class="btn-primary">CREATE</button>
+                <button id="btn-create-back" class="btn-secondary">BACK</button>
+            </div>
+        </div>
+
+        <!-- Room Lobby -->
+        <div id="room-lobby" class="screen-overlay hidden">
+            <div class="menu-panel lobby-panel">
+                <div class="lobby-header">
+                    <h2 class="panel-title" id="lobby-room-name">ROOM</h2>
+                    <div class="lobby-code">CODE: <span id="lobby-room-code">------</span></div>
+                    <div class="lobby-mode" id="lobby-mode-name">FREE FOR ALL</div>
+                </div>
+
+                <div class="lobby-body">
+                    <div class="lobby-players">
+                        <h3 class="lobby-section-title">PLAYERS</h3>
+                        <div id="lobby-player-list"></div>
+                    </div>
+                    <div class="lobby-chat">
+                        <h3 class="lobby-section-title">CHAT</h3>
+                        <div id="lobby-chat-messages"></div>
+                        <div class="lobby-chat-input-wrap">
+                            <input type="text" id="lobby-chat-input" class="neon-input neon-input-sm"
+                                placeholder="Type a message..." maxlength="200" autocomplete="off"
+                                spellcheck="false">
+                            <button id="btn-send-chat" class="btn-accent">SEND</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lobby-actions">
+                    <button id="btn-ready" class="btn-primary btn-ready">READY</button>
+                    <button id="btn-start-match" class="btn-primary btn-start hidden">START MATCH</button>
+                    <button id="btn-leave-room" class="btn-secondary">LEAVE</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Match Results Screen -->
+        <div id="match-results" class="screen-overlay hidden">
+            <div class="menu-panel results-panel">
+                <h2 class="panel-title results-title">MATCH OVER</h2>
+                <div id="results-winner" class="results-winner"></div>
+                <div id="results-table-wrap">
+                    <table id="results-table">
+                        <thead>
+                            <tr>
+                                <th>RANK</th>
+                                <th>PLAYER</th>
+                                <th>KILLS</th>
+                                <th>DEATHS</th>
+                                <th>SCORE</th>
+                            </tr>
+                        </thead>
+                        <tbody id="results-body"></tbody>
+                    </table>
+                </div>
+                <button id="btn-results-lobby" class="btn-primary">BACK TO LOBBY</button>
             </div>
         </div>
 
@@ -126,11 +322,20 @@
         <div id="wave-announce" class="hidden">
             <span id="wave-announce-text">WAVE 1</span>
         </div>
+
+        <!-- Countdown Overlay (3, 2, 1, GO) -->
+        <div id="countdown-overlay" class="hidden">
+            <span id="countdown-value">3</span>
+        </div>
     </div>
+
+    <!-- Socket.IO Client CDN -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 
     <script src="js/sound.js"></script>
     <script src="js/engine.js"></script>
     <script src="js/entities.js"></script>
+    <script src="js/network.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/game.js"></script>
 </body>

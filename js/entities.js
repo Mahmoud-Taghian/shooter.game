@@ -1023,3 +1023,168 @@ class PowerUp {
         ctx.restore();
     }
 }
+
+// ---- REMOTE PLAYER ----
+class RemotePlayer {
+    constructor(state) {
+        this.updateState(state);
+        // Animation timers
+        this.thrusterTimer = 0;
+        this.enginePulse = 0;
+        this.wingFlap = 0;
+        this.shieldRotation = 0;
+    }
+
+    updateState(state) {
+        this.id = state.id;
+        this.name = state.name;
+        this.x = state.x;
+        this.y = state.y;
+        this.angle = state.angle;
+        this.hp = state.hp;
+        this.maxHp = state.maxHp;
+        this.currentWeapon = state.currentWeapon;
+        this.dead = state.dead;
+        this.invincible = state.invincible;
+        this.color = state.color;
+        this.team = state.team;
+        this.shooting = state.shooting;
+        this.radius = 18;
+    }
+
+    update(dt) {
+        if (this.dead) return;
+
+        // Animations
+        this.enginePulse += dt * 8;
+        this.wingFlap += dt * 4;
+        this.shieldRotation += dt * 2;
+
+        // Thruster particles (simulate based on velocity or just generic if alive)
+        this.thrusterTimer -= dt;
+        if (this.thrusterTimer <= 0) {
+            this.thrusterTimer = 0.05;
+            const backAngle = this.angle + Math.PI;
+            Engine.spawnParticles(
+                this.x + Math.cos(backAngle) * 16,
+                this.y + Math.sin(backAngle) * 16,
+                1,
+                { speed: 80, life: 0.2, size: 3, color: this.color, angle: backAngle, spread: 0.4 }
+            );
+        }
+    }
+
+    draw(ctx) {
+        if (this.dead) return;
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Nametag
+        ctx.save();
+        ctx.font = '10px "Inter", sans-serif';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.textAlign = 'center';
+        ctx.fillText(this.name, 0, -32);
+        
+        // HP Bar
+        if (this.hp < this.maxHp) {
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(-15, -28, 30, 4);
+            ctx.fillStyle = this.color;
+            ctx.fillRect(-15, -28, 30 * (this.hp / this.maxHp), 4);
+        }
+        ctx.restore();
+
+        ctx.rotate(this.angle);
+
+        const pulseVal = Math.sin(this.enginePulse) * 0.5 + 0.5;
+        const isFlashing = this.invincible && Math.sin(Date.now() * 0.02) > 0;
+
+        // Shield visualization
+        if (this.invincible) {
+            ctx.save();
+            ctx.rotate(-this.angle + this.shieldRotation);
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.25 + pulseVal * 0.2})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, this.radius + 8, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Engine glow
+        const engineGlow = 12 + pulseVal * 8;
+        const engineGlowGrad = ctx.createRadialGradient(-12, 0, 0, -12, 0, engineGlow);
+        engineGlowGrad.addColorStop(0, `rgba(255, 255, 255, ${0.3 + pulseVal * 0.15})`);
+        engineGlowGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = engineGlowGrad;
+        ctx.beginPath();
+        ctx.arc(-12, 0, engineGlow, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Ship body outline glow
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = isFlashing ? 35 : 18;
+
+        // Wing panels
+        const flapOffset = Math.sin(this.wingFlap) * 1.5;
+        ctx.fillStyle = isFlashing ? 'rgba(255,255,255,0.6)' : '#445577';
+        ctx.beginPath();
+        ctx.moveTo(-16, -16 - flapOffset);
+        ctx.lineTo(-8, -10);
+        ctx.lineTo(-14, -6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-16, 16 + flapOffset);
+        ctx.lineTo(-8, 10);
+        ctx.lineTo(-14, 6);
+        ctx.closePath();
+        ctx.fill();
+
+        // Main hull
+        ctx.fillStyle = isFlashing ? 'rgba(255,255,255,0.7)' : '#8899bb';
+        ctx.beginPath();
+        ctx.moveTo(24, 0);         
+        ctx.lineTo(10, -6);
+        ctx.lineTo(-4, -12);
+        ctx.lineTo(-14, -14);      
+        ctx.lineTo(-10, -4);
+        ctx.lineTo(-12, 0);
+        ctx.lineTo(-10, 4);
+        ctx.lineTo(-14, 14);       
+        ctx.lineTo(-4, 12);
+        ctx.lineTo(10, 6);
+        ctx.closePath();
+        ctx.fill();
+
+        // Cockpit canopy
+        ctx.shadowBlur = 25;
+        ctx.shadowColor = this.color;
+        ctx.fillStyle = this.color;
+        ctx.globalAlpha = 0.8;
+        ctx.beginPath();
+        ctx.ellipse(8, 0, 5, 3.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Wing edge neon accents
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.6 + pulseVal * 0.3})`;
+        ctx.shadowBlur = 12;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(-14, -14);
+        ctx.lineTo(6, -5);
+        ctx.lineTo(22, 0);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-14, 14);
+        ctx.lineTo(6, 5);
+        ctx.lineTo(22, 0);
+        ctx.stroke();
+
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+}
